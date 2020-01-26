@@ -47,18 +47,20 @@ class TSPISlave {
     static TSPISlave* spi_slaves[3];
     volatile uint32_t spi_map;
     volatile uint32_t spi_irq;
+    bool valid() const;
     bool available();
     bool active();
     void pushr(uint16_t data);
     uint16_t popr();
-    uint8_t sck, miso, mosi, cs;
+    const int portno, sck, miso, mosi, cs;
 
   private:
     SPIClass *port;
-    bool setSlaveMOSI(uint8_t pin);
-    bool setSlaveMISO(uint8_t pin);
-    bool setSlaveSCK(uint8_t pin);
-    bool setSlaveCS(uint8_t pin);
+    int setSlaveMOSI(uint8_t pin);
+    int setSlaveMISO(uint8_t pin);
+    int setSlaveSCK(uint8_t pin);
+    int setSlaveCS(uint8_t pin);
+    int getPortNo(SPIClass &_port);
 };
 
 #endif

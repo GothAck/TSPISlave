@@ -38,184 +38,269 @@ void tspi0_isr(void);
 void tspi1_isr(void);
 void tspi2_isr(void);
 
-TSPISlave::TSPISlave(SPIClass& _port, uint8_t _miso, uint8_t _mosi, uint8_t _sck, uint8_t _cs, uint8_t _fmsz) {
-  port = &_port;
-  ( _fmsz <= 8 ) ? _fmsz = 8 : _fmsz = 16; 
-
-  if ( &_port == &SPI ) {
-#if defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-    SIM_SCGC6 |= SIM_SCGC6_SPI0; // enable slave clock
-    spi_map = 0x4002C000;
-#elif defined(KINETISL)
-    SIM_SCGC4 |= SIM_SCGC4_SPI0; // enable slave clock
-    SIM_SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTC; // enable ports
-    spi_map = 0x40076000;
-#endif
-    spi_irq = IRQ_SPI0;
-    _VectorsRam[16 + IRQ_SPI0] = tspi0_isr;
-    spi_slaves[0] = this;
-  }
+int TSPISlave::getPortNo(SPIClass &_port) {
+  if (&_port == &SPI) return 0;
 #if defined(KINETISL) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  else if ( &_port == &SPI1 ) {
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-    SIM_SCGC6 |= SIM_SCGC6_SPI1; // enable slave clock
-    spi_map = 0x4002D000;
-#elif defined(KINETISL)
-    SIM_SCGC4 |= SIM_SCGC4_SPI1; // enable slave clock
-    SIM_SCGC5 |= SIM_SCGC5_PORTE; // enable port
-    spi_map = 0x40077000;
-#endif
-    spi_irq = IRQ_SPI1;
-    _VectorsRam[16 + IRQ_SPI1] = tspi1_isr;
-    spi_slaves[1] = this;
-  }
+  if (&_port == &SPI1) return 1;
 #endif
 #if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  else if ( &_port == &SPI2 ) {
-    SIM_SCGC3 |= SIM_SCGC3_SPI2; // enable slave clock
-    spi_map = 0x400AC000;
-    spi_irq = IRQ_SPI2;
-    _VectorsRam[16 + IRQ_SPI2] = tspi2_isr;
-    spi_slaves[2] = this;
-  }
+  if (&_port == &SPI2) return 2;
 #endif
+  return -1;
+}
 
-#if defined(KINETISL)
-  (*(KINETISL_SPI_t *)spi_map).C1 = ((uint8_t)0b00000000); // disable spi
-  (*(KINETISL_SPI_t *)spi_map).C2 = ((uint8_t)(( _fmsz == 8 ) ? 0x00 : 0x40));  //((uint8_t)0b01000000);
-  (*(KINETISL_SPI_t *)spi_map).BR = ((uint8_t)0b00000000);
-  (*(KINETISL_SPI_t *)spi_map).C1 = ((uint8_t)0b11101100);
-#endif
+TSPISlave::TSPISlave(SPIClass& _port, uint8_t _miso, uint8_t _mosi, uint8_t _sck, uint8_t _cs, uint8_t _fmsz):
+  port(&_port),
+  portno(getPortNo(_port)),
+  mosi(setSlaveMOSI(_mosi)),
+  miso(setSlaveMISO(_miso)),
+  cs(setSlaveCS(_cs)),
+  sck(setSlaveSCK(_sck))
+  {
+    ( _fmsz <= 8 ) ? _fmsz = 8 : _fmsz = 16;
 
+    if (!valid()) return;
+
+    switch (portno) {
+      case 0: {
 #if defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  (*(KINETISK_SPI_t *)spi_map).MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
-  (*(KINETISK_SPI_t *)spi_map).MCR = 0x00000000;
-  (*(KINETISK_SPI_t *)spi_map).MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
-  (*(KINETISK_SPI_t *)spi_map).CTAR0 = 0;
-  (*(KINETISK_SPI_t *)spi_map).MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
-  (*(KINETISK_SPI_t *)spi_map).CTAR0 = SPI_CTAR_FMSZ(_fmsz - 1);
-  (*(KINETISK_SPI_t *)spi_map).MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
-  (*(KINETISK_SPI_t *)spi_map).MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
-  (*(KINETISK_SPI_t *)spi_map).CTAR0 = (*(KINETISK_SPI_t *)spi_map).CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA);
-  (*(KINETISK_SPI_t *)spi_map).MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
-  (*(KINETISK_SPI_t *)spi_map).RSER = 0x00020000;
+        SIM_SCGC6 |= SIM_SCGC6_SPI0; // enable slave clock
+        spi_map = 0x4002C000;
+#elif defined(KINETISL)
+        SIM_SCGC4 |= SIM_SCGC4_SPI0; // enable slave clock
+        SIM_SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTC; // enable ports
+        spi_map = 0x40076000;
 #endif
+        spi_irq = IRQ_SPI0;
+        _VectorsRam[16 + IRQ_SPI0] = tspi0_isr;
+        spi_slaves[0] = this;
+        break;
+      }
+      case 1: {
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
+        SIM_SCGC6 |= SIM_SCGC6_SPI1; // enable slave clock
+        spi_map = 0x4002D000;
+#elif defined(KINETISL)
+        SIM_SCGC4 |= SIM_SCGC4_SPI1; // enable slave clock
+        SIM_SCGC5 |= SIM_SCGC5_PORTE; // enable port
+        spi_map = 0x40077000;
+#endif
+        spi_irq = IRQ_SPI1;
+        _VectorsRam[16 + IRQ_SPI1] = tspi1_isr;
+        spi_slaves[1] = this;
+        break;
+      }
+      case 2: {
+        SIM_SCGC3 |= SIM_SCGC3_SPI2; // enable slave clock
+        spi_map = 0x400AC000;
+        spi_irq = IRQ_SPI2;
+        _VectorsRam[16 + IRQ_SPI2] = tspi2_isr;
+        spi_slaves[2] = this;
+        break;
+      }
+    }
 
-  setSlaveMOSI(mosi = _mosi);
-  setSlaveMISO(miso = _miso);
-  setSlaveCS(cs = _cs);
-  setSlaveSCK(sck = _sck);
+  #if defined(KINETISL)
+    (*(KINETISL_SPI_t *)spi_map).C1 = ((uint8_t)0b00000000); // disable spi
+    (*(KINETISL_SPI_t *)spi_map).C2 = ((uint8_t)(( _fmsz == 8 ) ? 0x00 : 0x40));  //((uint8_t)0b01000000);
+    (*(KINETISL_SPI_t *)spi_map).BR = ((uint8_t)0b00000000);
+    (*(KINETISL_SPI_t *)spi_map).C1 = ((uint8_t)0b11101100);
+  #endif
 
-  NVIC_SET_PRIORITY(spi_irq, 1); // set priority
-  NVIC_ENABLE_IRQ(spi_irq); // enable CS IRQ
+  #if defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
+    (*(KINETISK_SPI_t *)spi_map).MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
+    (*(KINETISK_SPI_t *)spi_map).MCR = 0x00000000;
+    (*(KINETISK_SPI_t *)spi_map).MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
+    (*(KINETISK_SPI_t *)spi_map).CTAR0 = 0;
+    (*(KINETISK_SPI_t *)spi_map).MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
+    (*(KINETISK_SPI_t *)spi_map).CTAR0 = SPI_CTAR_FMSZ(_fmsz - 1);
+    (*(KINETISK_SPI_t *)spi_map).MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
+    (*(KINETISK_SPI_t *)spi_map).MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
+    (*(KINETISK_SPI_t *)spi_map).CTAR0 = (*(KINETISK_SPI_t *)spi_map).CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA);
+    (*(KINETISK_SPI_t *)spi_map).MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
+    (*(KINETISK_SPI_t *)spi_map).RSER = 0x00020000;
+  #endif
+
+    NVIC_SET_PRIORITY(spi_irq, 1); // set priority
+    NVIC_ENABLE_IRQ(spi_irq); // enable CS IRQ
+  }
+
+int TSPISlave::setSlaveMISO(uint8_t pin) {
+  if (!valid()) return -1;
+  switch (portno) {
+    case 0: {
+      switch (pin) {
+        case 8:
+          CORE_PIN8_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 12:
+          CORE_PIN12_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 39:
+          CORE_PIN39_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+
+      }
+      break;
+    }
+    case 1: {
+      switch (pin) {
+        case 1:
+          CORE_PIN1_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 5:
+          CORE_PIN5_CONFIG = PORT_PCR_MUX(6);
+          return pin;
+      }
+      break;
+    }
+    case 2: {
+      switch (pin) {
+        case 45:
+          CORE_PIN45_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 51:
+          CORE_PIN51_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
+  }
+  return -1;
 }
 
-bool TSPISlave::setSlaveMISO(uint8_t pin) {
-  if ( pin == 1 ) {
-    CORE_PIN1_CONFIG = PORT_PCR_MUX(2);
-    return 1;
+int TSPISlave::setSlaveMOSI(uint8_t pin) {
+  if (!valid()) return -1;
+  switch (portno) {
+    case 0: {
+      switch (pin) {
+        case 7:
+          CORE_PIN7_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 11:
+          CORE_PIN11_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
+    case 1: {
+      switch (pin) {
+        case 0:
+          CORE_PIN0_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 21:
+          CORE_PIN21_CONFIG = PORT_PCR_MUX(7);
+          return pin;
+      }
+      break;
+    }
+    case 2: {
+      switch (pin) {
+        case 44:
+          CORE_PIN44_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 52:
+          CORE_PIN52_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
   }
-  if ( pin == 5 ) {
-    CORE_PIN5_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 8 ) {
-    CORE_PIN8_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-  else if ( pin == 12 ) {
-    CORE_PIN12_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  else if ( pin == 51 ) {
-    CORE_PIN51_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-#endif
-  return 0;
+  return -1;
 }
 
-bool TSPISlave::setSlaveMOSI(uint8_t pin) {
-  if ( pin == 0 ) {
-    CORE_PIN0_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-    return 1;
+int TSPISlave::setSlaveCS(uint8_t pin) {
+  if (!valid()) return -1;
+  switch (portno) {
+    case 0: {
+      switch (pin) {
+        case 2:
+          CORE_PIN2_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 10:
+          CORE_PIN10_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
+    case 1: {
+      switch (pin) {
+        case 6:
+          CORE_PIN6_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 31:
+          CORE_PIN31_CONFIG = PORT_PCR_MUX(7);
+          return pin;
+      }
+      break;
+    }
+    case 2: {
+      switch (pin) {
+        case 43:
+          CORE_PIN43_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 55:
+          CORE_PIN55_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
   }
-  if ( pin == 21 ) {
-    CORE_PIN21_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 7 ) {
-    CORE_PIN7_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-    return 1;
-  }
-  else if ( pin == 11 ) {
-    CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-    return 1;
-  }
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  else if ( pin == 52 ) {
-    CORE_PIN52_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-    return 1;
-  }
-#endif
-  return 0;
+  return -1;
 }
 
-bool TSPISlave::setSlaveCS(uint8_t pin) {
-  if ( pin == 2 ) { // SPI0, T3.X, LC
-    CORE_PIN2_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_MUX(2);
-    return 1;
+int TSPISlave::setSlaveSCK(uint8_t pin) {
+  if (!valid()) return -1;
+  switch (portno) {
+    case 0: {
+      switch (pin) {
+        case 13:
+          CORE_PIN13_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 14:
+          CORE_PIN14_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
+    case 1: {
+      switch (pin) {
+        case 20:
+          CORE_PIN20_CONFIG = PORT_PCR_MUX(7);
+          return pin;
+        case 32:
+          CORE_PIN32_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
+    case 2: {
+      switch (pin) {
+        case 46:
+          CORE_PIN46_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+        case 53:
+          CORE_PIN53_CONFIG = PORT_PCR_MUX(2);
+          return pin;
+      }
+      break;
+    }
   }
-  if ( pin == 6 ) { // SPI1, LC
-    CORE_PIN6_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 10 ) { // SPI0, T3.X, LC
-    CORE_PIN10_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_MUX(2);
-    return 1;
-  }
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  if ( pin == 31 ) {
-    CORE_PIN31_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 43 ) { // SPI2, T3.X
-    CORE_PIN43_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_MUX(2);
-    return 1;
-  }
-#endif
-  return 0;
-}
-
-bool TSPISlave::setSlaveSCK(uint8_t pin) {
-  if ( pin == 13 ) {
-    CORE_PIN13_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 14 ) {
-    CORE_PIN14_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 20 ) {
-    CORE_PIN20_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__)
-  if ( pin == 32 ) {
-    CORE_PIN32_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-  if ( pin == 53 ) {
-    CORE_PIN53_CONFIG = PORT_PCR_MUX(2);
-    return 1;
-  }
-#endif
-  return 0;
+  return -1;
 }
 
 void TSPISlave::onReceive(_spi_ptr handler) {
   _spihandler = handler;
+}
+
+bool TSPISlave::valid() const {
+  return !(
+    mosi < 0 ||
+    miso < 0 ||
+    sck < 0 ||
+    cs < 0 ||
+    portno < 0
+  );
 }
 
 bool TSPISlave::available() {
