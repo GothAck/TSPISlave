@@ -52,7 +52,11 @@ class TSPISlave {
     bool active();
     void pushr(uint16_t data);
     uint16_t popr();
-    const int portno, sck, miso, mosi, cs;
+    const int portno;
+    const int sck;
+    const int miso;
+    const int mosi;
+    const int cs;
 
   private:
     SPIClass *port;

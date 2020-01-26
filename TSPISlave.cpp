@@ -126,7 +126,6 @@ TSPISlave::TSPISlave(SPIClass& _port, uint8_t _miso, uint8_t _mosi, uint8_t _sck
   }
 
 int TSPISlave::setSlaveMISO(uint8_t pin) {
-  if (!valid()) return -1;
   switch (portno) {
     case 0: {
       switch (pin) {
@@ -170,7 +169,6 @@ int TSPISlave::setSlaveMISO(uint8_t pin) {
 }
 
 int TSPISlave::setSlaveMOSI(uint8_t pin) {
-  if (!valid()) return -1;
   switch (portno) {
     case 0: {
       switch (pin) {
@@ -210,7 +208,6 @@ int TSPISlave::setSlaveMOSI(uint8_t pin) {
 }
 
 int TSPISlave::setSlaveCS(uint8_t pin) {
-  if (!valid()) return -1;
   switch (portno) {
     case 0: {
       switch (pin) {
@@ -250,7 +247,6 @@ int TSPISlave::setSlaveCS(uint8_t pin) {
 }
 
 int TSPISlave::setSlaveSCK(uint8_t pin) {
-  if (!valid()) return -1;
   switch (portno) {
     case 0: {
       switch (pin) {
